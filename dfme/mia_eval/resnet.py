@@ -127,6 +127,8 @@ class ResNet(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x, logits=False, temperature=1):
+        if len(x.shape) == 3:
+            x = torch.unsqueeze(x, dim=0)
         output = self.conv1(x)
         output = self.conv2_x(output)
         output = self.conv3_x(output)

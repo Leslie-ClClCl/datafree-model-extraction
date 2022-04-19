@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="d4fae8fe-023b-455d-860b-6e13b1a219ab" name="dfme">
+        <fileTransfer rootFolder="/home/lichenglong/pycharm_project/dfme" accessType="SFTP" host="222.20.126.3" port="22" sshConfigId="c6ce8098-72a3-4547-9007-d1eb298fa595" sshConfig="2080" />
+      </webServer>
+    </option>
+  </component>
+</project>
