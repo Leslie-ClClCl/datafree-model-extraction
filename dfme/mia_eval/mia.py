@@ -76,65 +76,84 @@ def evaluate(model, input, true_label):
     return acc
 
 
-class simple_mlp(nn.Module):
+class TpMLP(nn.Module):
     def __init__(self):
-        super(simple_mlp, self).__init__()
-        self.fc1 = nn.Linear(10, 128)
-        self.fc2 = nn.Linear(128, 32)
-        self.fc3 = nn.Linear(32, 2)
+        super(TpMLP, self).__init__()
+        self.p1 = nn.Sequential(
+            nn.Linear(10, 1024),
+            nn.ReLU(),
+            nn.Linear(1024, 512),
+            nn.ReLU(),
+            nn.Linear(512, 64),
+            nn.ReLU()
+        )
+        self.p2 = nn.Sequential(
+            nn.Linear(10, 512),
+            nn.ReLU(),
+            nn.Linear(512, 64),
+            nn.ReLU()
+        )
+        self.p3 = nn.Sequential(
+            nn.Linear(128, 256),
+            nn.ReLU(),
+            nn.Linear(256, 64),
+            nn.ReLU(),
+            nn.Linear(64, 1)
+        )
 
-    def forward(self, input):
-        relu = nn.ReLU()
-        softmax = nn.Softmax()
-        output = relu(self.fc1(input))
-        output = relu(self.fc2(output))
-        output = softmax(self.fc3(output))
+    def forward(self, fx, label):
+        output1 = self.p1(fx)
+        output2 = self.p2(label)
+        output = self.p3(torch.concat((output1, output2), dim=1))
         return output
 
 
-# print('resnet 18 acc: {}'.format(evaluate(target_model, attack_train_img, attack_train_class)))
+def get_onehot_label(labels, num_total=10):
+    arr = torch.zeros((labels.shape[0], num_total))
+    arr[np.arange(0, labels.shape[0]), labels] = 1
+    return arr.cuda()
 
-# from sklearn.pipeline import make_pipeline
-# from sklearn.preprocessing import StandardScaler
-# from sklearn.svm import SVC
-# attack_model = make_pipeline(StandardScaler(), SVC(kernel='rbf', gamma='auto'))
-# attack_model.fit(attack_train_X, attack_train_y)
 
-# attack_model = lgb.LGBMClassifier(objective='binary', reg_lambda=0.2, n_estimators=10000, learning_rate=0.1)
-# attack_model = svm.SVC(kernel='rbf', verbose=True)
-# attack_model.fit(attack_train_X, attack_train_y)
-attack_model = simple_mlp().cuda()
+attack_model = TpMLP().cuda()
 # attack_model.load_state_dict(torch.load('./attack_model/best.pt'))
+
 # train attack model
-criteria = nn.CrossEntropyLoss()
-optimizer = optim.SGD(attack_model.parameters(), lr=0.1)
-scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
-attack_model.train()
+criteria = nn.MSELoss()
+optimizer = optim.SGD(attack_model.parameters(), lr=0.01)
+scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
+
 for i in range(200):
     loss_e = 0
-    for idx, (X, y) in enumerate(attack_train_loader):
-        X, y = X.cuda(), y.cuda()
-        target_pred = target_model(X)
-        target_pred, _ = torch.topk(target_pred, k=10, dim=1)
+    samples_num = 0
+    attack_model.train()
+    for idx, (X, label, y) in enumerate(attack_train_loader):
         optimizer.zero_grad()
-        attack_output = attack_model(target_pred)
-        loss = criteria(attack_output, y)
+        X, y = X.cuda(), y.cuda()
+        label = torch.tensor(label, dtype=torch.float32).cuda()
+        label = label.unsqueeze(1)
+        fx = target_model(X)
+
+        attack_output = attack_model(fx, get_onehot_label(y))
+        loss = criteria(attack_output, label)
         loss.backward()
         optimizer.step()
         loss_e += loss.item()
+        samples_num += label.shape[0]
+
     scheduler.step()
-    print('epoch {} loss {}'.format(i, loss_e))
+    print('epoch {} loss {}'.format(i, loss_e / samples_num))
+    # evaluate attack model
+    attack_model.eval()
+    correct = 0
+    total = 0
+    for idx, (X, label, y) in enumerate(attack_test_loader):
+        X, y, label = X.cuda(), y.cuda(), label.cuda()
+        label = label.unsqueeze(1)
+        fx = target_model(X)
+
+        attack_pred = attack_model(fx, get_onehot_label(y))
+        attack_pred = torch.where(attack_pred > 0.5, 1, 0)
+        correct += torch.eq(attack_pred, label).sum().item()
+        total += y.shape[0]
+    print('acc {}'.format(correct / total))
 torch.save(attack_model.state_dict(), './attack_model/best.pt')
-# evaluate attack model
-attack_model.eval()
-correct = 0
-total = 0
-for idx, (X, y) in enumerate(attack_test_loader):
-    X, y = X.cuda(), y.cuda()
-    target_output = target_model(X, logits=True, temperature=2)
-    target_output, _ = torch.topk(target_output, k=10, dim=1)
-    pred = attack_model(target_output)
-    pred = torch.argmax(pred, dim=1)
-    correct += torch.eq(pred, y).sum().item()
-    total += y.shape[0]
-print('acc {}'.format(correct/total))

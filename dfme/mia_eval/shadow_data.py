@@ -183,14 +183,18 @@ def get_average_cifar10():
     return cifar_train_avg, cifar_test_avg
 
 
-def split_cifar_for_attack(train_set:CustomCIFAR, test_set:CustomCIFAR):
+def split_cifar_for_attack(train_set: CustomCIFAR, test_set: CustomCIFAR):
     # 将Target Model的训练集和测试集划分成两部分
     # 分别是Attack Model的训练集和测试集，前者2.5W+2.5W=5W, 后者0.5W+0.5W=1W张
     target_train = np.array([1] * 25000 + [0] * 25000)
     target_test = np.array([1] * 5000 + [0] * 5000)
-    attack_train = CustomCIFAR(data=np.concatenate((train_set.data[0:25000], test_set.data[0:25000])), target=target_train,
+    attack_train = CustomCIFAR(data=np.concatenate((train_set.data[0:25000], test_set.data[0:25000])),
+                               target=target_train,
+                               raw_class=np.concatenate((train_set.target[0:25000], test_set.target[0:25000])),
                                transform=transform_cifar)
-    attack_test = CustomCIFAR(data=np.concatenate((train_set.data[25000:30000], test_set.data[25000:30000])), target=target_test,
+    attack_test = CustomCIFAR(data=np.concatenate((train_set.data[25000:30000], test_set.data[25000:30000])),
+                              target=target_test,
+                              raw_class=np.concatenate((train_set.target[25000:30000], test_set.target[25000: 30000])),
                               transform=transform_cifar)
     return attack_train, attack_test
 
