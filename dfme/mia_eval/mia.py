@@ -22,7 +22,7 @@ os.system('rm tmp')
 
 
 target_model = resnet18(10).cuda()
-target_model.load_state_dict(torch.load('./target_model/best.pt'))
+target_model.load_state_dict(torch.load('./target_model/cifar10_resnet18_student.pt'))
 cifar_train_avg, cifar_test_avg = get_average_cifar10()
 cifar_train_loader, cifar_test_loader = data.DataLoader(cifar_train_avg, batch_size=128, shuffle=True), \
                                         data.DataLoader(cifar_test_avg, batch_size=128, shuffle=False)
@@ -45,16 +45,17 @@ cifar_train_loader, cifar_test_loader = data.DataLoader(cifar_train_avg, batch_s
 #         optimizer.step()
 #     scheduler.step()
 #
-#     # eval
-#     target_model.eval()
-#     correct = 0
-#     total = 0
-#     for idx, (image, label) in enumerate(cifar_test_loader):
-#         image, label = image.cuda(), label.cuda()
-#         pred = target_model(image)
-#         _, pred = torch.max(pred, dim=1)
-#         total += label.shape[0]
-#         correct += (pred == label).sum().item()
+# eval
+target_model.eval()
+correct = 0
+total = 0
+for idx, (image, label) in enumerate(cifar_test_loader):
+    image, label = image.cuda(), label.cuda()
+    pred = target_model(image)
+    _, pred = torch.max(pred, dim=1)
+    total += label.shape[0]
+    correct += (pred == label).sum().item()
+print('acc {}'.format(correct/total))
 #     if best_acc < correct/total:
 #         best_acc = correct/total
 #         torch.save(target_model.state_dict(), './target_model/best.pt')

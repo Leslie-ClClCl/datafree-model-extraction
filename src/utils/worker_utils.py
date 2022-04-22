@@ -3,6 +3,8 @@ import json
 import numpy as np
 import os
 import time
+
+import torch
 import torchvision.transforms as transforms
 from tensorboardX import SummaryWriter
 from torch.utils.data import Dataset
@@ -111,7 +113,7 @@ class MiniDataset(Dataset):
             self.transform = None
 
     def __len__(self):
-        return len(self.labels)
+        return self.labels.shape[0]
 
     def __getitem__(self, index):
         data, target = self.data[index], self.labels[index]
@@ -158,8 +160,8 @@ class Metrics(object):
             self.exp_name += '_{}'.format(suffix)
         train_event_folder = mkdir(os.path.join(self.result_path, self.exp_name, 'train.event'))
         eval_event_folder = mkdir(os.path.join(self.result_path, self.exp_name, 'eval.event'))
-        self.train_writer = SummaryWriter(train_event_folder)
-        self.eval_writer = SummaryWriter(eval_event_folder)
+        self.train_writer = SummaryWriter(train_event_folder, flush_secs=5)
+        self.eval_writer = SummaryWriter(eval_event_folder, flush_secs=5)
 
     def update_commu_stats(self, round_i, stats):
         cid, bytes_w, comp, bytes_r = \
@@ -219,3 +221,21 @@ class Metrics(object):
 
         with open(metrics_dir, 'w') as ouf:
             json.dump(str(metrics), ouf)
+
+
+def get_flat_model_params(model):
+    flatten_params = []
+    for params in model.parameters():
+        flatten_param = params.data.view(-1)
+        flatten_params.append(flatten_param)
+    flatten_params = torch.cat(flatten_params)
+    return flatten_params.detach()
+
+
+def set_flat_model_params(model, flatten_params):
+    prev_idx = 0
+    for params in model.parameters():
+        flat_size = int(np.prod(list(params.size())))
+        params.data.copy_(
+            flatten_params[prev_idx:prev_idx + flat_size].view(params.size()))
+        prev_idx += flat_size

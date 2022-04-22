@@ -6,11 +6,11 @@ import torchvision
 cpath = os.path.dirname(__file__)
 
 
-NUM_USER = 100
+NUM_USER = 20
 SAVE = True
 DATASET_FILE = os.path.join(cpath, 'data')
 IMAGE_DATA = not False
-np.random.seed(6)
+np.random.seed(5)
 
 
 class ImageDataset(object):

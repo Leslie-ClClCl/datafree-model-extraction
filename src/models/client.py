@@ -1,4 +1,6 @@
 import time
+
+import torch
 from torch.utils.data import DataLoader
 
 
@@ -86,3 +88,42 @@ class Client(object):
         tot_correct, loss = self.worker.local_test(dataloader)
 
         return tot_correct, len(dataset), loss
+
+
+class AdClient(Client):
+    def __init__(self, cid, group, train_data, test_data, batch_size, worker):
+        self.local_train_round_ctr = 0
+        super(AdClient, self).__init__(cid, group, train_data, test_data, batch_size, worker)
+
+    def local_train(self, latest_model):
+        # 首先客户端在本地训练数据集上进行训练
+        self.local_train_round_ctr += self.worker.train_on_private_data(self.cid, self.train_dataloader,
+                                                                        self.local_train_round_ctr)
+        solution = self.worker.local_train_G(self.cid, latest_model)
+        return len(self.train_data), solution
+
+    def local_test(self, round_i):
+        self.worker.test_local_model(self.cid, self.test_dataloader, round_i)
+
+    def set_latest_G(self, latest_G):
+        self.worker.set_latest_G(self.cid, latest_G)
+
+    def pred(self, input):
+        return self.worker.pred(self.cid, input)
+
+    def local_distill(self, samples, global_pred):
+        self.worker.local_distill(self.cid, samples, global_pred)
+
+    def test_global_model(self, latest_model, criteria):
+        total_samples = 0
+        correct = 0
+        loss = 0
+        for idx, (X, y) in enumerate(self.test_dataloader):
+            X, y = X.cuda(), y.cuda()
+            pred = latest_model(X)
+            loss += criteria(pred, y).item()
+            pred = torch.argmax(pred, dim=1)
+            correct += torch.eq(pred, y).sum().item()
+            total_samples += y.shape[0]
+        return correct, loss, total_samples
+

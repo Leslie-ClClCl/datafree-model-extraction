@@ -8,7 +8,7 @@ from ..utils.worker_utils import Metrics
 
 
 class BaseTrainer(object):
-    def __init__(self, dataset, options, model=None, optimizer=None, worker=None):
+    def __init__(self, dataset, options, model=None, optimizer=None, worker=None, client_class=None):
         # 为训练器设置一个worker
         if model is not None and optimizer is not None:
             self.worker = Worker(model, optimizer, options)
@@ -20,7 +20,7 @@ class BaseTrainer(object):
 
         self.batch_size = options['batch_size']
         self.all_train_data_num = 0
-        self.clients = self.setup_clients(dataset)
+        self.clients = self.setup_clients(dataset, client_class)
         assert len(self.clients) > 0
         print('>>> Initialize {} clients in total'.format(len(self.clients)))
         # 为训练器设置参数
@@ -32,16 +32,17 @@ class BaseTrainer(object):
             'simple average' if self.simple_avg else 'sample numbers'))
 
         # Initialize system metrics
-        self.name = '_'.join([options['name'], f'wn{self.clients_per_round}', f'tn{len(self.clients)}'])
+        self.name = '_'.join([options['name'], f'tn{len(self.clients)}'])
         self.metrics = Metrics(self.clients, options, self.name)
         self.print_result = not options['noprint']
-        self.latest_model = self.worker.get_flat_model_params()
+        if self.latest_model is None:
+            self.latest_model = self.worker.get_flat_model_params()
 
     @staticmethod
     def move_model_to_gpu(model):
         model.cuda()
 
-    def setup_clients(self, dataset):
+    def setup_clients(self, dataset, client_class=Client):
         """
         实例化客户端
         """
@@ -56,7 +57,7 @@ class BaseTrainer(object):
             else:
                 user_id = int(user)
             self.all_train_data_num += len(train_data[user])
-            c = Client(user_id, group, train_data[user], test_data[user], self.batch_size, self.worker)
+            c = client_class(user_id, group, train_data[user], test_data[user], self.batch_size, self.worker)
             all_clients.append(c)
         return all_clients
 
@@ -91,7 +92,7 @@ class BaseTrainer(object):
         """
         聚合本地客户端的参数，输出一个全局的参数
         """
-        avg_solution = torch.zeros_like(self.latest_model)
+        avg_solution = torch.zeros_like(solutions[0][1])
         # 两种聚合方式：1）简单的平均聚合 2）根据数据量进行加权聚合
         if self.simple_avg:
             num = 0
@@ -178,4 +179,5 @@ class BaseTrainer(object):
         stats = {'acc': sum(tot_corrects) / sum(num_samples),
                  'loss': sum(losses) / sum(num_samples),
                  'num_samples': num_samples, 'ids': ids, 'groups': groups}
+
         return stats

@@ -4,6 +4,7 @@ import importlib
 import torch
 import os
 
+from src.trainers.fedad import FedAdTrainer
 from src.utils.worker_utils import read_data
 from src.trainers.fedavg import FedAvgTrainer
 from config import OPTIMIZERS, DATASETS, MODEL_PARAMS, TRAINERS
@@ -22,7 +23,7 @@ def read_options():
                         help='name of trainer;',
                         type=str,
                         choices=OPTIMIZERS,
-                        default='fedavg')
+                        default='fedad')
     parser.add_argument('--dataset',
                         help='name of dataset;',
                         type=str,
@@ -34,7 +35,7 @@ def read_options():
     parser.add_argument('--wd',
                         help='weight decay parameter;',
                         type=float,
-                        default=0.001)
+                        default=5e-4)
     parser.add_argument('--gpu',
                         action='store_true',
                         default=False,
@@ -70,11 +71,11 @@ def read_options():
     parser.add_argument('--num_epoch',
                         help='number of epochs when clients train on data;',
                         type=int,
-                        default=5)
+                        default=20)
     parser.add_argument('--lr',
                         help='learning rate for inner solver;',
                         type=float,
-                        default=0.1)
+                        default=1e-5)
     parser.add_argument('--seed',
                         help='seed for randomness;',
                         type=int,
@@ -87,6 +88,17 @@ def read_options():
                         help='description of this experiments',
                         type=str,
                         default='Test')
+    parser.add_argument('--local_epoch',
+                        help='# local distillation epoch',
+                        type=int,
+                        default=20)
+    parser.add_argument('--noise_batch',
+                        type=int,
+                        default=64)
+    parser.add_argument('--lr_G',
+                        type=float,
+                        default=1e-3)
+    parser.add_argument('--nz', type=int, default=64)
     parsed = parser.parse_args()
     options = parsed.__dict__
     options['gpu'] = options['gpu'] and torch.cuda.is_available()
@@ -109,7 +121,7 @@ def read_options():
     options.update(MODEL_PARAMS(dataset_name, options['model']))
 
     # Load selected trainer
-    trainer_class = FedAvgTrainer
+    trainer_class = FedAdTrainer
 
     # Print arguments and return
     max_length = max([len(key) for key in options.keys()])
