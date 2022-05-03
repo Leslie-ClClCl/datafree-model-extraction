@@ -96,13 +96,14 @@ class AdClient(Client):
         self.local_train_round_ctr = 0
         super(AdClient, self).__init__(cid, group, train_data, test_data, batch_size, worker)
 
-    def local_train(self, latest_model, train_G=True):
+    def local_train(self, latest_model=None, train_G=True):
         # 首先客户端在本地训练数据集上进行训练
         self.local_train_round_ctr += self.worker.train_on_private_data(self.cid, self.train_dataloader,
                                                                         self.local_train_round_ctr)
         if train_G:
             solution = self.worker.local_train_G(self.cid, latest_model)
             return len(self.train_data), solution
+        return len(self.train_data)
 
     def local_test(self, round_i):
         self.worker.test_local_model(self.cid, self.test_dataloader, round_i)

@@ -35,11 +35,8 @@ class BaseTrainer(object):
         self.name = '_'.join([options['name'], f'tn{len(self.clients)}'])
         self.metrics = Metrics(self.clients, options, self.name)
         self.print_result = not options['noprint']
-        try:
-            if self.latest_model is None:
-                self.latest_model = self.worker.get_flat_model_params()
-        except AttributeError:
-            print('latest model not exist')
+        if self.latest_model is None:
+            self.latest_model = self.worker.get_flat_model_params()
 
     @staticmethod
     def move_model_to_gpu(model):

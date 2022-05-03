@@ -25,11 +25,12 @@ class AdWorker(Worker):
         客户端在本地训练数据上训练
         """
         criteria = torch.nn.CrossEntropyLoss()
-        if round_i < 30:
-            optimizer = torch.optim.SGD(self.models[client_id].parameters(), lr=self.options['lr_C_local_train'],
-                                        weight_decay=self.options['wd'], momentum=0.9)
-        else:
-            optimizer = torch.optim.SGD(self.models[client_id].parameters(), lr=self.options['lr_C_local_train'] / 10,
+        # optimizer = torch.optim.Adam(self.models[client_id].parameters(), lr=self.options['lr_C_local_train'])
+        # optimizer = GD(self.models[client_id].parameters(), lr=self.options['lr'], weight_decay=self.options['wd'])
+        optimizer = torch.optim.SGD(self.models[client_id].parameters(), lr=self.options['lr_C_local_train'],
+                                    weight_decay=self.options['wd'], momentum=0.9)
+        if round_i > 25:
+            optimizer = torch.optim.SGD(self.models[client_id].parameters(), lr=self.options['lr_C_local_train']/10,
                                         weight_decay=self.options['wd'], momentum=0.9)
         for i in range(self.local_epoch):
             train_loss = 0
@@ -108,18 +109,18 @@ class AdWorker(Worker):
 
     def local_distill(self, client_id, samples, global_pred, round_i):
         sample_num = samples.shape[0]
-        global_pred = F.softmax(global_pred, dim=-1)
+        # global_pred = F.softmax(global_pred, dim=-1)
         dataloader = DataLoader(MiniDataset(samples, global_pred, label_type='float32'), shuffle=False, batch_size=64)
-        optimizer = self.optim_C[client_id]
-        # criteria = torch.nn.L1Loss()
-        criteria = torch.nn.KLDivLoss(reduction="batchmean")
+        optimizer = torch.optim.Adam(self.models[client_id].parameters(), lr=self.options['lr_C_local_distill'])
+        criteria = torch.nn.L1Loss()
+        # criteria = torch.nn.KLDivLoss(reduction="batchmean")
         for epoch_idx in range(self.local_epoch):
             local_distill_loss = 0
             for batch_idx, (X, y) in enumerate(dataloader):
                 optimizer.zero_grad()
                 X, y = X.cuda(), y.cuda()
                 local_pred = self.models[client_id](X)
-                local_pred = F.log_softmax(local_pred, dim=-1)
+                # local_pred = F.log_softmax(local_pred, dim=-1)
                 loss = criteria(local_pred, y)
                 loss.backward()
                 optimizer.step()

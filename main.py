@@ -11,8 +11,8 @@ from config import OPTIMIZERS, DATASETS, MODEL_PARAMS, TRAINERS
 
 os.system('nvidia-smi -q -d Memory |grep -A4 GPU|grep Free >./tmp')
 memory_gpu = [int(x.split()[2]) for x in open('./tmp', 'r').readlines()]
-os.environ['CUDA_VISIBLE_DEVICES'] = str(np.argmax(memory_gpu))
-# os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+# os.environ['CUDA_VISIBLE_DEVICES'] = str(np.argmax(memory_gpu))
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 os.system('rm tmp')
 
 
@@ -75,7 +75,7 @@ def read_options():
     parser.add_argument('--lr',
                         help='learning rate for inner solver;',
                         type=float,
-                        default=0.1)
+                        default=1e-5)
     parser.add_argument('--seed',
                         help='seed for randomness;',
                         type=int,
@@ -92,10 +92,6 @@ def read_options():
                         help='# local distillation epoch',
                         type=int,
                         default=20)
-    parser.add_argument('--global_distill_epoch',
-                        help='# local distillation epoch',
-                        type=int,
-                        default=50)
     parser.add_argument('--noise_batch',
                         type=int,
                         default=64)
