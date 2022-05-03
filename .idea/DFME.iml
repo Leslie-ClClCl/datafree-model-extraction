@@ -10,6 +10,7 @@
       <list>
         <option value="$MODULE_DIR$/dfme" />
         <option value="$MODULE_DIR$/src" />
+        <option value="$MODULE_DIR$/FedGen" />
       </list>
     </option>
   </component>

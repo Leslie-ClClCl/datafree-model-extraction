@@ -1,9 +1,3 @@
-import copy
-import os
-import time
-
-import numpy as np
-from tensorboardX import SummaryWriter
 from torch.utils.data import DataLoader
 
 from src.utils.worker_utils import MiniDataset, get_flat_model_params, set_flat_model_params, mkdir
@@ -15,7 +9,7 @@ from ..optimizer.gd import GD
 
 
 class AdWorker(Worker):
-    def __init__(self, models, generators, optimizers, event_fold, options):
+    def __init__(self, models, generators, optimizers, event_writer, options):
         self.models = models
         self.generators = generators
         self.optim_C, self.optim_G = optimizers
@@ -24,16 +18,19 @@ class AdWorker(Worker):
         self.nz = options['nz']
         self.batch_size = options['batch_size']
         self.options = options
-        self.train_event_fold, self.eval_event_fold = event_fold
+        self.train_writer, self.eval_writer = event_writer
 
     def train_on_private_data(self, client_id, train_loader, round_i):
         """
         客户端在本地训练数据上训练
         """
         criteria = torch.nn.CrossEntropyLoss()
-        optimizer = GD(self.models[client_id].parameters(), lr=1e-2)
-        # optimizer = GD(self.models[client_id].parameters(), lr=self.options['lr'], weight_decay=self.options['wd'])
-        writer = SummaryWriter(self.train_event_fold, flush_secs=5)
+        if round_i < 30:
+            optimizer = torch.optim.SGD(self.models[client_id].parameters(), lr=self.options['lr_C_local_train'],
+                                        weight_decay=self.options['wd'], momentum=0.9)
+        else:
+            optimizer = torch.optim.SGD(self.models[client_id].parameters(), lr=self.options['lr_C_local_train'] / 10,
+                                        weight_decay=self.options['wd'], momentum=0.9)
         for i in range(self.local_epoch):
             train_loss = 0
             for idx, (X, y) in enumerate(train_loader):
@@ -47,16 +44,14 @@ class AdWorker(Worker):
 
                 loss = criteria(pred, y)
                 loss.backward()
-                torch.nn.utils.clip_grad_norm(self.models[client_id].parameters(), 60)
+                # torch.nn.utils.clip_grad_norm(self.models[client_id].parameters(), 60)
                 optimizer.step()
 
                 train_loss += loss.item()
-            writer.add_scalar('client {} training loss'.format(client_id), train_loss, i+round_i)
-        writer.close()
+            self.train_writer.add_scalar('client {} training loss'.format(client_id), train_loss, i+round_i)
         return self.local_epoch
 
     def test_local_model(self, client_id, test_loader, round_i):
-        writer = SummaryWriter(self.eval_event_fold, flush_secs=5)
         total = 0
         correct = 0
         for _, (X, y) in enumerate(test_loader):
@@ -65,8 +60,7 @@ class AdWorker(Worker):
             pred = torch.argmax(pred, dim=1)
             correct += torch.eq(pred, y).sum().item()
             total += y.shape[0]
-        writer.add_scalar('client {} test accuracy'.format(client_id), correct/total, round_i)
-        writer.close()
+        self.eval_writer.add_scalar('client {} test accuracy'.format(client_id), correct/total, round_i)
 
     def local_train_G(self, client_id, latest_model):
         """
@@ -76,18 +70,18 @@ class AdWorker(Worker):
         optimizer_C = self.optim_C[client_id]
         optimizer_G = self.optim_G[client_id]
         for i in range(self.local_epoch):
-            # for k in range(5):
-            #     z = torch.randn((self.nz, self.batch_size, 1, 1)).cuda()
-            #     optimizer_C.zero_grad()
-            #     fake = self.generators[client_id](z).detach()
-            #     t_logit = latest_model(fake)
-            #     s_logit = self.models[client_id](fake)
-            #     loss_C = F.l1_loss(s_logit, t_logit.detach())
-            #
-            #     loss_C.backward()
-            #     optimizer_C.step()
+            for k in range(5):
+                z = torch.randn((self.batch_size, self.nz, 1, 1)).cuda()
+                optimizer_C.zero_grad()
+                fake = self.generators[client_id](z).detach()
+                t_logit = latest_model(fake)
+                s_logit = self.models[client_id](fake)
+                loss_C = F.l1_loss(s_logit, t_logit.detach())
 
-            z = torch.randn((self.nz, self.batch_size, 1, 1)).cuda()
+                loss_C.backward()
+                optimizer_C.step()
+
+            z = torch.randn((self.batch_size, self.nz, 1, 1)).cuda()
             optimizer_G.zero_grad()
             self.generators[client_id].train()
             fake = self.generators[client_id](z)
@@ -103,23 +97,34 @@ class AdWorker(Worker):
     def set_latest_G(self, client_id, latest_G):
         set_flat_model_params(self.generators[client_id], latest_G)
 
-    def pred(self, client_id, samples):
-        # TODO 预测的时候应该按batch进行计算，减小显存占用
-        res = self.models[client_id](samples)
+    def pred(self, client_id, sample_loader):
+        res = []
+        for X, _ in sample_loader:
+            X = X.cuda()
+            pred = self.models[client_id](X)
+            res.extend([pred[i] for i in range(pred.shape[0])])
+        res = torch.stack(res)
         return res
 
-    def local_distill(self, client_id, samples, global_pred):
-        dataloader = DataLoader(MiniDataset(samples.cpu(), global_pred.cpu()), batch_size=64)
-        # TODO 选择服务端蒸馏的优化器和损失函数
-        optimizer = torch.optim.SGD(self.models[client_id].parameters(), lr=1e-5)
-        criteria = torch.nn.L1Loss()
+    def local_distill(self, client_id, samples, global_pred, round_i):
+        sample_num = samples.shape[0]
+        global_pred = F.softmax(global_pred, dim=-1)
+        dataloader = DataLoader(MiniDataset(samples, global_pred, label_type='float32'), shuffle=False, batch_size=64)
+        optimizer = self.optim_C[client_id]
+        # criteria = torch.nn.L1Loss()
+        criteria = torch.nn.KLDivLoss(reduction="batchmean")
         for epoch_idx in range(self.local_epoch):
+            local_distill_loss = 0
             for batch_idx, (X, y) in enumerate(dataloader):
                 optimizer.zero_grad()
                 X, y = X.cuda(), y.cuda()
                 local_pred = self.models[client_id](X)
-                loss = criteria(local_pred, global_pred)
+                local_pred = F.log_softmax(local_pred, dim=-1)
+                loss = criteria(local_pred, y)
                 loss.backward()
                 optimizer.step()
-        print('client {} local distillation done'.format(client_id))
 
+                local_distill_loss += loss.item()
+            self.train_writer.add_scalar('client {} local distillation loss'.format(client_id),
+                                         local_distill_loss, round_i*self.local_epoch+epoch_idx)
+        print('client {} local distillation done'.format(client_id))

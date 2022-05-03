@@ -75,7 +75,7 @@ def read_options():
     parser.add_argument('--lr',
                         help='learning rate for inner solver;',
                         type=float,
-                        default=1e-5)
+                        default=0.1)
     parser.add_argument('--seed',
                         help='seed for randomness;',
                         type=int,
@@ -92,13 +92,29 @@ def read_options():
                         help='# local distillation epoch',
                         type=int,
                         default=20)
+    parser.add_argument('--global_distill_epoch',
+                        help='# local distillation epoch',
+                        type=int,
+                        default=50)
     parser.add_argument('--noise_batch',
                         type=int,
                         default=64)
-    parser.add_argument('--lr_G',
+    parser.add_argument('--lr_C_local_train',
                         type=float,
-                        default=1e-3)
-    parser.add_argument('--nz', type=int, default=64)
+                        default=1e-2)
+    parser.add_argument('--lr_G_local',
+                        type=float,
+                        default=1e-4)
+    parser.add_argument('--lr_C_global_distill',
+                        type=float,
+                        default=1e-4)
+    parser.add_argument('--lr_C_local_distill',
+                        type=float,
+                        default=1e-4)
+    parser.add_argument('--distill_loss',
+                        type=str,
+                        default='L1Loss')
+    parser.add_argument('--nz', type=int, default=100)
     parsed = parser.parse_args()
     options = parsed.__dict__
     options['gpu'] = options['gpu'] and torch.cuda.is_available()

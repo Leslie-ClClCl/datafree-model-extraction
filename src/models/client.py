@@ -1,5 +1,6 @@
 import time
 
+import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
@@ -95,12 +96,13 @@ class AdClient(Client):
         self.local_train_round_ctr = 0
         super(AdClient, self).__init__(cid, group, train_data, test_data, batch_size, worker)
 
-    def local_train(self, latest_model):
+    def local_train(self, latest_model, train_G=True):
         # 首先客户端在本地训练数据集上进行训练
         self.local_train_round_ctr += self.worker.train_on_private_data(self.cid, self.train_dataloader,
                                                                         self.local_train_round_ctr)
-        solution = self.worker.local_train_G(self.cid, latest_model)
-        return len(self.train_data), solution
+        if train_G:
+            solution = self.worker.local_train_G(self.cid, latest_model)
+            return len(self.train_data), solution
 
     def local_test(self, round_i):
         self.worker.test_local_model(self.cid, self.test_dataloader, round_i)
@@ -108,11 +110,11 @@ class AdClient(Client):
     def set_latest_G(self, latest_G):
         self.worker.set_latest_G(self.cid, latest_G)
 
-    def pred(self, input):
-        return self.worker.pred(self.cid, input)
+    def pred(self, input_loader):
+        return self.worker.pred(self.cid, input_loader)
 
-    def local_distill(self, samples, global_pred):
-        self.worker.local_distill(self.cid, samples, global_pred)
+    def local_distill(self, samples, global_pred, round_i):
+        self.worker.local_distill(self.cid, samples, global_pred, round_i)
 
     def test_global_model(self, latest_model, criteria):
         total_samples = 0

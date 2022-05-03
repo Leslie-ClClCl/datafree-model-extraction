@@ -1,6 +1,7 @@
 from ..trainers.BaseTrainer import BaseTrainer
 from ..models.model import choose_model
 from ..optimizer.gd import GD
+from ..models.client import Client
 
 
 class FedAvgTrainer(BaseTrainer):
@@ -9,7 +10,7 @@ class FedAvgTrainer(BaseTrainer):
         self.move_model_to_gpu(model)
 
         self.optimizer = GD(model.parameters(), lr=options['lr'], weight_decay=options['wd'])
-        super(FedAvgTrainer, self).__init__(dataset, options, model, self.optimizer)
+        super(FedAvgTrainer, self).__init__(dataset, options, model, self.optimizer, client_class=Client)
 
     def train(self):
         print('>>> Select {} clients per round \n'.format(self.clients_per_round))

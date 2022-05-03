@@ -81,13 +81,13 @@ def read_data(train_data_dir, test_data_dir, key=None):
 
 
 class MiniDataset(Dataset):
-    def __init__(self, data, labels):
+    def __init__(self, data, labels, data_type='uint8', label_type='int64'):
         super(MiniDataset, self).__init__()
         self.data = np.array(data)
-        self.labels = np.array(labels).astype("int64")
+        self.labels = np.array(labels).astype(label_type)
 
         if self.data.ndim == 4 and self.data.shape[3] == 3:
-            self.data = self.data.astype("uint8")
+            self.data = self.data.astype(data_type)
             self.transform = transforms.Compose(
                 [transforms.RandomHorizontalFlip(),
                  transforms.RandomCrop(32, 4),
@@ -146,12 +146,15 @@ class Metrics(object):
         self.acc_on_eval_data = [0] * num_rounds
 
         self.result_path = mkdir(os.path.join('./result', self.options['dataset']))
-        suffix = '{}_sd{}_lr{}_ep{}_bs{}_{}'.format(name,
-                                                    options['seed'],
-                                                    options['lr'],
-                                                    options['num_epoch'],
-                                                    options['batch_size'],
-                                                    'w' if options['noaverage'] else 'a')
+        suffix = '{}_sd{}_lr0{}_lr1{}_lr2{}_lr3{}_ep{}_bs{}_{}'.format(name,
+                                                                       options['seed'],
+                                                                       options['lr_C_local_train'],
+                                                                       options['lr_G_local'],
+                                                                       options['lr_C_global_distill'],
+                                                                       options['lr_C_local_distill'],
+                                                                       options['num_epoch'],
+                                                                       options['batch_size'],
+                                                                       'w' if options['noaverage'] else 'a')
 
         self.exp_name = '{}_{}_{}_{}'.format(time.strftime('%Y-%m-%dT%H-%M-%S'), options['algo'],
                                              options['model'], suffix)
