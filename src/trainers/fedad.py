@@ -35,7 +35,7 @@ class FedAdTrainer(BaseTrainer):
             generators.append(G)
             optimizer_C.append(optim.SGD(C.parameters(), lr=options['lr_C_local_distill'],
                                          weight_decay=options['wd'], momentum=0.9))
-            optimizer_G.append(optim.Adam(G.parameters(), lr=options['lr_G_local']))
+            optimizer_G.append(optim.RMSprop(G.parameters(), lr=options['lr_G_local']))
         # 日志保存路径
         result_path = mkdir(os.path.join('./result', options['dataset']))
         suffix = '{}_sd{}_lr0{}_lr1{}_lr2{}_lr3{}_ep{}_bs{}_{}'.format('_'.join([options['name'],
@@ -79,13 +79,13 @@ class FedAdTrainer(BaseTrainer):
     def global_distill(self, pred_from_clients, fake_img, round_i):
         # 对客户端的预测分数进行平均
         pred_from_clients_mean = torch.mean(torch.stack(pred_from_clients), dim=0).cpu()
-        # pred_from_clients_soft = F.softmax(pred_from_clients_mean, dim=-1)
-        dataloader = DataLoader(MiniDataset(fake_img.cpu(), pred_from_clients_mean, label_type='float32'),
+        pred_from_clients_soft = F.softmax(pred_from_clients_mean, dim=-1)
+        dataloader = DataLoader(MiniDataset(fake_img.cpu(), pred_from_clients_soft, label_type='float32'),
                                 batch_size=64)
         # TODO 选择服务端蒸馏的优化器和损失函数参数
-        optimizer = torch.optim.Adam(self.latest_model.parameters(), lr=self.lr_C_global_distill)
-        criteria = torch.nn.L1Loss()
-        # criteria = torch.nn.KLDivLoss(reduction="batchmean")
+        optimizer = torch.optim.RMSprop(self.latest_model.parameters(), lr=self.lr_C_global_distill)
+        # criteria = torch.nn.L1Loss()
+        criteria = torch.nn.KLDivLoss(reduction="batchmean")
         writer = self.train_writer
         self.latest_model.train()
         for r_idx in range(self.num_round):
@@ -94,11 +94,11 @@ class FedAdTrainer(BaseTrainer):
                 optimizer.zero_grad()
                 X, y = X.cuda(), y.cuda()
                 global_pred = self.latest_model(X)
-                # global_pred = F.log_softmax(global_pred, dim=-1)
+                global_pred = F.log_softmax(global_pred, dim=-1)
                 loss = criteria(global_pred, y)
                 loss.backward()
-                distill_loss += loss.item()
                 optimizer.step()
+                distill_loss += loss.item()
             writer.add_scalar('global model distillation loss', distill_loss, round_i * self.num_round + r_idx)
         # 返回全局模型的预测结果
         latest_pred = []
@@ -125,8 +125,14 @@ class FedAdTrainer(BaseTrainer):
 
     def train(self):
         # pretrain
+        c_threads = []
         for client in self.clients:
-            client.local_train(train_G=False)
+            client_thread = threading.Thread(target=client.local_train, args=(None, False))
+            client_thread.start()
+            time.sleep(0.5)
+            c_threads.append(client_thread)
+        for c_thread in c_threads:
+            c_thread.join()
         fake_img = []
         for g_idx in range(100):
             z = torch.randn((100, 100, 1, 1)).cuda()
@@ -148,8 +154,9 @@ class FedAdTrainer(BaseTrainer):
             selected_clients = self.select_clients(seed=round_i)
             # 客户端在本地更新生成器G
             solutions_G = []
-
+            c_threads = []
             for idx, client in enumerate(selected_clients):
+                c_threads.append(threading.Thread(target=client.local_train, args=self.latest_model))
                 solution_G = client.local_train(self.latest_model)
                 solutions_G.append(solution_G)
             # 聚合生成器

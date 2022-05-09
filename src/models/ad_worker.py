@@ -45,11 +45,12 @@ class AdWorker(Worker):
 
                 loss = criteria(pred, y)
                 loss.backward()
-                # torch.nn.utils.clip_grad_norm(self.models[client_id].parameters(), 60)
+                torch.nn.utils.clip_grad_norm(self.models[client_id].parameters(), 60)
                 optimizer.step()
 
                 train_loss += loss.item()
             self.train_writer.add_scalar('client {} training loss'.format(client_id), train_loss, i+round_i)
+            # print('client {} epoch {}'.format(client_id, i))
         return self.local_epoch
 
     def test_local_model(self, client_id, test_loader, round_i):
