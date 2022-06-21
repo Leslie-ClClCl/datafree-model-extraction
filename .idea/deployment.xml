@@ -21,6 +21,9 @@
           <mappings>
             <mapping deploy="/" local="$PROJECT_DIR$" />
           </mappings>
+          <excludedPaths>
+            <excludedPath path="/result/fedad_cnn_200_20_10_Mnist_10_0.4_0.25_32_0.01_0.0001_0.0001_0.0001_20_20_64_100_500_05-25_09:08:58" />
+          </excludedPaths>
         </serverdata>
       </paths>
     </serverData>

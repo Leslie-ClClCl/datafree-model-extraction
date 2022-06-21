@@ -58,7 +58,7 @@ class TwoConvOneFc(nn.Module):
         self.fc1 = nn.Linear(1024, 512)
         self.fc2 = nn.Linear(512, out_dim)
 
-    def forward(self, x):
+    def forward(self, x, logit=False, T=5):
         out = F.relu(self.conv1(x))
         out = F.max_pool2d(out, 2)
         out = F.relu(self.conv2(out))
@@ -66,6 +66,8 @@ class TwoConvOneFc(nn.Module):
         out = out.view(out.size(0), -1)
         out = F.relu(self.fc1(out))
         out = self.fc2(out)
+        if logit:
+            out = F.softmax(out/T)
         return out
 
 
@@ -89,7 +91,7 @@ class CifarCnn(nn.Module):
                 if m.bias is not None:
                     m.bias.data.uniform_(-stdv, stdv)
 
-    def forward(self, x):
+    def forward(self, x, logit=False, T=3):
         out = F.relu(self.conv1(x))
         out = F.max_pool2d(out, 2)
         out = F.relu(self.conv2(out))
@@ -98,6 +100,28 @@ class CifarCnn(nn.Module):
         out = F.relu(self.fc1(out))
         out = F.relu(self.fc2(out))
         out = self.fc3(out)
+        if logit:
+            out = F.softmax(out / T, dim=0)
+        return out
+
+
+class MyCNN(nn.Module):
+    def __init__(self, input_shape, out_dim):
+        super(MyCNN, self).__init__()
+        self.conv1 = nn.Conv2d(input_shape[0], 6, kernel_size=3, stride=2, padding=1)
+        self.bn1 = nn.BatchNorm2d(6)
+        self.conv2 = nn.Conv2d(6, 16, kernel_size=3, stride=2, padding=1)
+        self.bn2 = nn.BatchNorm2d(16)
+        self.flatten = nn.Flatten(1, -1)
+        self.linear1 = nn.Linear(784, 32)
+        self.linear2 = nn.Linear(32, out_dim)
+
+    def forward(self, x):
+        out = F.relu(self.bn1(self.conv1(x)), inplace=True)
+        out = F.relu(self.bn2(self.conv2(out)), inplace=True)
+        out = self.flatten(out)
+        out = self.linear1(out)
+        out = self.linear2(out)
         return out
 
 
@@ -144,6 +168,8 @@ def choose_model(model_name, input_shape, num_class):
         return TwoHiddenLayerFc(input_shape, num_class)
     elif model_name == 'cnn':
         return TwoConvOneFc(input_shape, num_class)
+    elif model_name == 'my_cnn':
+        return MyCNN(input_shape, num_class)
     elif model_name == 'ccnn':
         return CifarCnn(input_shape, num_class)
     elif model_name == 'lenet':

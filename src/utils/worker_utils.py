@@ -20,6 +20,10 @@ def mkdir(path):
     return path
 
 
+def read_data_dirichlet(train_data_dir, test_data_dir):
+    pass
+
+
 def read_data(train_data_dir, test_data_dir, key=None):
     """Parses data in given train and test data directories
 

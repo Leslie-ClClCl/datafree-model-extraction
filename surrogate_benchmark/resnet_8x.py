@@ -3,7 +3,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
- 
+
+
 class BasicBlock(nn.Module):
     expansion = 1
  
@@ -114,16 +115,20 @@ class ResNet(nn.Module):
  
 def ResNet18_8x(num_classes=10):
     return ResNet(BasicBlock, [2,2,2,2], num_classes)
- 
+
+
 def ResNet34_8x(num_classes=10, normalize_coefs=None, normalize=False):
     return ResNet(BasicBlock, [3,4,6,3], num_classes, normalize_coefs=normalize_coefs, normalize=normalize)
- 
+
+
 def ResNet50_8x(num_classes=10):
     return ResNet(Bottleneck, [3,4,6,3], num_classes)
- 
+
+
 def ResNet101_8x(num_classes=10):
     return ResNet(Bottleneck, [3,4,23,3], num_classes)
- 
+
+
 def ResNet152_8x(num_classes=10):
     return ResNet(Bottleneck, [3,8,36,3], num_classes)
  

@@ -124,27 +124,27 @@ class FedAdTrainer(BaseTrainer):
         return accuracy
 
     def train(self):
-        # pretrain
-        c_threads = []
-        for client in self.clients:
-            client_thread = threading.Thread(target=client.local_train, args=(None, False))
-            client_thread.start()
-            time.sleep(0.5)
-            c_threads.append(client_thread)
-        for c_thread in c_threads:
-            c_thread.join()
-        fake_img = []
-        for g_idx in range(100):
-            z = torch.randn((100, 100, 1, 1)).cuda()
-            fake_img_b = self.latest_G(z).detach().cpu()
-            fake_img.extend(fake_img_b[i] for i in range(100))
-        fake_img = torch.stack(fake_img)
-        fake_img_loader = DataLoader(MiniDataset(fake_img.cpu(), np.array([0] * fake_img.shape[0])),
-                                     shuffle=False, batch_size=64)
-        # 客户端在G生成的样本上输出预测分数
-        pred_clients = self.local_pred(0, self.clients, fake_img_loader)
-        # 服务器的模型的蒸馏，并输出服务端模型的预测分数
-        self.global_distill(pred_clients, fake_img, 0)
+        # # pretrain
+        # c_threads = []
+        # for client in self.clients:
+        #     client_thread = threading.Thread(target=client.local_train, args=(None, False))
+        #     client_thread.start()
+        #     time.sleep(0.5)
+        #     c_threads.append(client_thread)
+        # for c_thread in c_threads:
+        #     c_thread.join()
+        # fake_img = []
+        # for g_idx in range(100):
+        #     z = torch.randn((100, 100, 1, 1)).cuda()
+        #     fake_img_b = self.latest_G(z).detach().cpu()
+        #     fake_img.extend(fake_img_b[i] for i in range(100))
+        # fake_img = torch.stack(fake_img)
+        # fake_img_loader = DataLoader(MiniDataset(fake_img.cpu(), np.array([0] * fake_img.shape[0])),
+        #                              shuffle=False, batch_size=64)
+        # # 客户端在G生成的样本上输出预测分数
+        # pred_clients = self.local_pred(0, self.clients, fake_img_loader)
+        # # 服务器的模型的蒸馏，并输出服务端模型的预测分数
+        # self.global_distill(pred_clients, fake_img, 0)
 
         best_acc = 0.0
         print('>>> Select {} clients per round \n'.format(self.clients_per_round))
